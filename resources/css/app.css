@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.container {
+    max-width: 800px;
+    margin: auto;
+}
+
+/* Style for the container */
+.datatable-container {
+    @apply max-w-7xl mx-auto p-4 bg-white rounded-lg shadow-md;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 10px;
+    border: 1px solid #ddd;
+}
+
+h1, h3 {
+    text-align: center;
+    color: #333;
+}
+
+
+/* Custom styling for the table header */
+table.dataTable thead {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Styling for table rows */
+table.dataTable tbody tr {
+    background-color: #f9f9f9;
+    border-bottom: 1px solid #ddd;
+}
+
+/* Hover effect for table rows */
+table.dataTable tbody tr:hover {
+    background-color: #e9ecef;
+}
+
+/* Style for action buttons */
+table.dataTable tbody td button {
+    border: none;
+    padding: 6px 12px;
+    margin: 2px;
+    cursor: pointer;
+}
+
+table.dataTable tbody td .btn-primary {
+    background-color: #007bff;
+    color: white;
+}
+
+table.dataTable tbody td .btn-danger {
+    background-color: #dc3545;
+    color: white;
+}
+
+table.dataTable tbody td .btn-sm {
+    font-size: 0.875rem;
+}
+
+/* Responsive styling (optional) */
+@media (max-width: 768px) {
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_length {
+        font-size: 0.875rem;
+    }
+    table.dataTable {
+        font-size: 0.9rem;
+    }
+}
+
+/* Optional: Adjust table styling */
+.table {
+    margin-bottom: 0; /* Remove bottom margin to avoid excess spacing */
+}

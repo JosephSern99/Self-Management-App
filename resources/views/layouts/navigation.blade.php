@@ -21,6 +21,11 @@
                         {{ __('Finance Tracker') }}
                     </x-nav-link>
                 </div>
+                  <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <x-nav-link :href="route('finance.home')" :active="request()->routeIs('finance.home')">
+                        {{ __('Payment Integration') }}
+                    </x-nav-link>
+                </div>
             </div>
 
             <!-- Settings Dropdown -->

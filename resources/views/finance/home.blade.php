@@ -23,8 +23,9 @@
     </div> --}}
     <div style="margin-bottom: 20px;"></div>
     <div class="flex">
-        <div class="datatable-container max-w-7xl mx-auto p-4 bg-white rounded-lg shadow-md overflow-y-auto h-96"> <!-- Set a fixed height -->
-             <a href="{{ route('finance.create') }}" class="btn btn-primary">Add New Entity</a>
+        <div class="datatable-container max-w-7xl mx-auto p-4 bg-white rounded-lg shadow-md overflow-y-auto h-96">
+            <!-- Set a fixed height -->
+            <a href="{{ route('finance.create') }}" class="btn btn-primary">Add New Funds</a>
             <table id="financialTable" class="w-full table-auto border-collapse">
                 <thead class="bg-dark text-white">
                     <tr>
@@ -56,25 +57,23 @@
 
                 // Proceed with the fetch request if the user confirmed
                 fetch("/finance/delete/" + entityId, {
-                    method: "POST",
-                    headers: {
-                        "X-CSRF-TOKEN": "{{ csrf_token() }}", // Use correct CSRF token syntax if in Blade
-                        "Content-Type": "application/json"
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert("Item deleted successfully.");
-                        location.reload(); // Reload the page or update the table
-                    } else {
-                        alert("Failed to delete the item.");
-                    }
-                })
-                .catch(error => console.error("Error:", error));
+                        method: "POST",
+                        headers: {
+                            "X-CSRF-TOKEN": "{{ csrf_token() }}", // Use correct CSRF token syntax if in Blade
+                            "Content-Type": "application/json"
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert("Item deleted successfully.");
+                            location.reload(); // Reload the page or update the table
+                        } else {
+                            alert("Failed to delete the item.");
+                        }
+                    })
+                    .catch(error => console.error("Error:", error));
             }
         });
-
-
     </script>
 </x-app-layout>

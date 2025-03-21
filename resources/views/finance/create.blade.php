@@ -30,9 +30,53 @@
         </form>
     </div>
 
+     <div class="loader hidden" id="loader"></div>
+
+
+
+    <style>
+        .loader {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            border: 5px solid #ccc;
+            border-top-color: #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            z-index: 9999;
+        }
+        .loader.hidden {
+            display: none;
+        }
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+
     <script>
+        // Function to show the loader
+        const showLoader = () => {
+            document.getElementById('loader').classList.remove('hidden');
+        };
+
+        // Function to hide the loader
+        const hideLoader = () => {
+            document.getElementById('loader').classList.add('hidden');
+        };
+
+
         document.getElementById('financialEntityForm').addEventListener('submit', function(event) {
             event.preventDefault(); // Prevent default form submission
+
+            showLoader();
 
             let formData = new FormData(this); // Capture form data
             let url = this.action; // Get the form action URL
@@ -54,6 +98,7 @@
             .then(data => {
                 // Display the success message as an alert
                 if (data.success) {
+                     hideLoader();
                     alert(data.message); // Display the message returned from the controller
                     location.href = '/finance'
                 } else {

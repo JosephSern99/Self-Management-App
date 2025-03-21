@@ -21,6 +21,7 @@ class ExpensePredictionController extends Controller
 
         // Execute the Python script
         $command = 'python predict_expense.py';
+
         $process = proc_open(
             $command,
             [

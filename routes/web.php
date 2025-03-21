@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\ExpensePredictionController;
@@ -25,7 +27,7 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::middleware('auth')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -37,6 +39,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/finance/delete/{id}', [FinanceController::class, 'delete'])->name('finance.delete');
 
     Route::post('/transactions/store', [TransactionController::class, 'store'])->name('transactions.store');
+
+    Route::post('stripe/webhook', [WebhookController::class, 'handleWebhook']);
+
+    Route::get('/payment/index', [PaymentController::class, 'home'])->name('payment.home');
+    Route::post('/payment-intent', [PaymentController::class, 'createPaymentIntent']);
 
 
     Route::get('/predict-expense', [ExpensePredictionController::class, 'predict']);

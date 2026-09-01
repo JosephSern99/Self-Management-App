@@ -30,3 +30,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-runstate-clients-spend-ledger.md`
   summary: Add status/current-node/timestamp fields to RunState for resumability and stuck-run detection.
   evidence: Review flagged RunState has no way to tell which node a run is in or when it started. AD-1 fixes RunState's field list explicitly; adding fields needs an architecture amendment, not a unilateral change mid-story. Revisit when Stories 1.5-1.7 build the actual node graph and need this.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-plan-locate-nodes.md`
+  summary: Consider whether routes/web.php, routes/api.php, config/services.php, and any future .github/workflows/** need denylist protection.
+  evidence: Review flagged that auth-guarded routes typically live in routes/web.php (wrapped in middleware groups) rather than only routes/auth.php, and that a Stripe webhook route or service credentials could live outside the files already protected. Not added now because these files also carry ordinary app routes/config the agent may legitimately need to touch for a normal fix -- blanket-denylisting them would block real work, not just unsafe work, so this needs Joseph's product judgment rather than a unilateral code change. No .github/workflows exists in the repo yet, so that pattern is moot until CI is added.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-plan-locate-nodes.md`
+  summary: Wire ScopeViolation logging (currently Python `logging` calls only) into the persistent Run Log once Story 1.8 exists.
+  evidence: Locate now logs a warning on every denylist/hallucination/symlink rejection, but nothing persists these logs anywhere durable yet -- Story 1.8 is what gives the pipeline permanent, inspectable Run Logs in S3.

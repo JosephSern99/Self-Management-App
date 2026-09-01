@@ -12,7 +12,17 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Plus Jakarta Sans', ...defaultTheme.fontFamily.sans],
+            },
+            colors: {
+                edic: {
+                    accent:       '#0d9488',
+                    'accent-bright': '#00d4aa',
+                    'accent-dark':   '#0f766e',
+                    'accent-light':  '#e6faf6',
+                    sidebar:      '#1a1e2e',
+                    bg:           '#f4f7f9',
+                },
             },
         },
     },

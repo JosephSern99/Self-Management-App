@@ -28,12 +28,16 @@ class FinanceController extends Controller
 
                 // Placeholder action buttons without links
                 return '
-                        <a href="' . $editUrl . '" class="bg-dark text-white rounded hover:bg-blue-600 px-2 py-1">
+                    <div style="display:flex;gap:6px;justify-content:center;">
+                        <button onclick="openEditModal(' . $row->id . ',\'' . addslashes($row->name) . '\',' . $row->initial_value . ',' . $row->current_value . ')" class="edic-btn-edit">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             Edit
-                        </a>
-                        <a href="javascript:void(0);" data-id="' . $row->id . '" class="bg-red-500 text-white rounded hover:bg-red-600 px-2 py-1 delete-button">
+                        </button>
+                        <button onclick="openDeleteModal(' . $row->id . ')" class="edic-btn-delete">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
                             Delete
-                        </a>';
+                        </button>
+                    </div>';
 
             })
             ->rawColumns(['action'])
@@ -53,6 +57,14 @@ class FinanceController extends Controller
 
     public function store(Request $request)
     {
+        // Strip commas from amount fields so "1,000.50" becomes "1000.50"
+        if ($request->has('initial_value')) {
+            $request->merge(['initial_value' => str_replace(',', '', $request->initial_value)]);
+        }
+        if ($request->has('current_value')) {
+            $request->merge(['current_value' => str_replace(',', '', $request->current_value)]);
+        }
+
         // Step 1: Perform initial validation for the 'name' field
         $data = $request->validate([
             'name' => 'required|string|max:255',

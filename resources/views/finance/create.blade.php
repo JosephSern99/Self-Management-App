@@ -1,116 +1,159 @@
 <x-app-layout>
-    <x-slot name="header">
-      @vite(['resources/css/app.css', 'resources/js/app.js'])
-        <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Finance New Model') }}
-        </h2>
-    </x-slot>
+    <x-slot name="header">Add New Fund</x-slot>
 
+    <div style="max-width:540px;">
 
-    <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white dark:bg-gray-800 shadow-md overflow-hidden sm:rounded-lg mx-auto">
-        <form id="financialEntityForm" action="{{ route('finance.store') }}" method="POST">
-            @csrf
-            <div>
-                <x-input-label for="name" :value="__('Finance Item')" />
-                <x-text-input id="name" class="block mt-1 w-full" type="text" name="name" required autofocus autocomplete="name" />
-                <x-input-error :messages="$errors->get('name')" class="mt-2" />
+        {{-- Back link --}}
+        <a href="{{ route('finance.home') }}" class="edic-btn edic-btn-secondary edic-btn-sm" style="margin-bottom:20px; display:inline-flex;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back to Finance Tracker
+        </a>
+
+        <div class="edic-card">
+            <div style="margin-bottom:24px;">
+                <h2 style="font-size:17px; font-weight:700; color:var(--edic-text-primary); margin:0 0 4px;">New Fund Entry</h2>
+                <p style="font-size:13px; color:var(--edic-text-secondary); margin:0;">
+                    Add a new asset to your portfolio. If the fund name already exists it will be restored and updated.
+                </p>
             </div>
 
-            <div class="mt-4">
-                <x-input-label for="initialValue" :value="__('Initial Value')" />
-                <x-text-input id="initial_value" class="block mt-1 w-full" type="text" name="initial_value" required autocomplete="initial_value" />
-                <x-input-error :messages="$errors->get('initialValue')" class="mt-2" />
-            </div>
+            {{-- Validation errors --}}
+            @if ($errors->any())
+                <div class="edic-alert edic-alert-error" style="margin-bottom:20px;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <div>@foreach ($errors->all() as $error)<div>{{ $error }}</div>@endforeach</div>
+                </div>
+            @endif
 
-            <x-text-input id="current_value" class="block mt-1 w-full" type="hidden" name="current_value" required autocomplete="current_value" />
+            <form id="createFundForm" action="{{ route('finance.store') }}" method="POST" novalidate>
+                @csrf
 
-            <div class="flex items-center justify-end mt-4">
-                <button type="submit" class="inline-flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-200 border border-transparent rounded-md font-semibold text-xs text-white dark:text-gray-800 uppercase tracking-widest hover:bg-green-700 dark:hover:bg-green focus:bg-gray-700 dark:focus:bg-white active:bg-gray-900 dark:active:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-green-800 transition ease-in-out duration-150">Create</button>
-            </div>
-        </form>
+                {{-- Fund name --}}
+                <div class="edic-form-group">
+                    <label for="name" class="edic-label">Fund Name</label>
+                    <input
+                        id="name"
+                        type="text"
+                        name="name"
+                        class="edic-input"
+                        placeholder="e.g. EPF, ASB, Unit Trust, Stocks"
+                        value="{{ old('name') }}"
+                        required
+                        autofocus
+                    >
+                    <div class="edic-input-hint">Use a unique name. Re-adding an existing name will restore & update it.</div>
+                </div>
+
+                {{-- Initial value --}}
+                <div class="edic-form-group">
+                    <label for="initial_value" class="edic-label">Initial Value (RM)</label>
+                    <div style="position:relative;">
+                        <span style="position:absolute; left:13px; top:50%; transform:translateY(-50%); font-size:14px; font-weight:600; color:var(--edic-text-secondary);">RM</span>
+                        <input
+                            id="initial_value"
+                            type="text"
+                            name="initial_value"
+                            class="edic-input"
+                            style="padding-left:40px;"
+                            placeholder="0.00"
+                            value="{{ old('initial_value') }}"
+                            inputmode="decimal"
+                            required
+                        >
+                    </div>
+                    <div class="edic-input-hint">Commas accepted — e.g. <strong>10,000.50</strong> is valid.</div>
+                </div>
+
+                {{-- Hidden current_value (set to initial on submit) --}}
+                <input type="hidden" id="current_value" name="current_value">
+
+                {{-- Submit --}}
+                <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+                    <a href="{{ route('finance.home') }}" class="edic-btn edic-btn-secondary">Cancel</a>
+                    <button type="submit" class="edic-btn edic-btn-primary" id="createBtn">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add Fund
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
-     <div class="loader hidden" id="loader"></div>
-
-
-
-    <style>
-        .loader {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 50px;
-            height: 50px;
-            border: 5px solid #ccc;
-            border-top-color: #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            z-index: 9999;
-        }
-        .loader.hidden {
-            display: none;
-        }
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
-
+    @push('scripts')
     <script>
-        // Function to show the loader
-        const showLoader = () => {
-            document.getElementById('loader').classList.remove('hidden');
-        };
+    // Format input with commas on blur, accept raw numeric on focus
+    var initialInput = document.getElementById('initial_value');
 
-        // Function to hide the loader
-        const hideLoader = () => {
-            document.getElementById('loader').classList.add('hidden');
-        };
+    function parseAmount(val) {
+        return parseFloat(String(val).replace(/,/g, '').replace(/[^0-9.]/g, '')) || 0;
+    }
 
+    function formatAmount(val) {
+        var n = parseAmount(val);
+        if (!n) return '';
+        return n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
-        document.getElementById('financialEntityForm').addEventListener('submit', function(event) {
-            event.preventDefault(); // Prevent default form submission
+    initialInput.addEventListener('blur', function () {
+        if (this.value.trim()) this.value = formatAmount(this.value);
+    });
 
-            showLoader();
+    initialInput.addEventListener('focus', function () {
+        // Strip commas so user can edit the raw number
+        this.value = String(parseAmount(this.value) || '');
+        if (this.value === '0') this.value = '';
+    });
 
-            let formData = new FormData(this); // Capture form data
-            let url = this.action; // Get the form action URL
+    document.getElementById('createFundForm').addEventListener('submit', function (e) {
+        e.preventDefault();
 
-            const initialValue = document.getElementById('initial_value').value;
+        var btn = document.getElementById('createBtn');
+        var rawVal = parseAmount(initialInput.value);
 
-            // Set the initial_value to be the same as current_value
-            document.getElementById('current_value').value = initialValue;
+        if (!document.getElementById('name').value.trim()) {
+            edicToast('Please enter a fund name.', 'error');
+            return;
+        }
+        if (!rawVal) {
+            edicToast('Please enter a valid initial value.', 'error');
+            initialInput.focus();
+            return;
+        }
 
-            fetch(url, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                    'Accept': 'application/json'
-                },
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Display the success message as an alert
-                if (data.success) {
-                     hideLoader();
-                    alert(data.message); // Display the message returned from the controller
-                    location.href = '/finance'
-                } else {
-                    alert('An error occurred: ' + (data.message || 'Please try again.'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-            });
+        // Strip commas before sending
+        initialInput.value = rawVal;
+        document.getElementById('current_value').value = rawVal;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;"></span> Adding…';
+
+        var formData = new FormData(this);
+
+        fetch(this.action, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': window.CSRF_TOKEN,
+                'Accept': 'application/json'
+            },
+            body: formData
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                edicToast(data.message || 'Fund added successfully.', 'success');
+                setTimeout(function () { window.location.href = '/finance'; }, 800);
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Fund';
+                edicToast(data.message || 'An error occurred.', 'error');
+            }
+        })
+        .catch(function () {
+            btn.disabled = false;
+            btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Fund';
+            edicToast('Network error. Please try again.', 'error');
         });
+    });
     </script>
-
-
+    @endpush
 </x-app-layout>

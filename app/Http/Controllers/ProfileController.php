@@ -48,7 +48,12 @@ class ProfileController extends Controller
 
         $user = $request->user();
 
-        Auth::logout();
+        // Not Auth::logout(): these routes are guarded by auth:sanctum, so
+        // Laravel's Authenticate middleware calls Auth::shouldUse('sanctum')
+        // for this request, making the no-guard-specified logout() resolve
+        // to Sanctum's RequestGuard, which has no logout() method. The
+        // session itself is still the 'web' guard, so target it explicitly.
+        Auth::guard('web')->logout();
 
         $user->delete();
 

@@ -29,11 +29,17 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::middleware('auth:sanctum')->group(function () {
+// Session-based (Blade-rendered) routes use the standard 'auth' guard, same
+// as /dashboard above -- not 'auth:sanctum', which is for token/API auth
+// and made Auth::logout() in ProfileController resolve to Sanctum's
+// RequestGuard (no logout() method) instead of the session guard.
+Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
 
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/finance', [FinanceController::class, 'home'])->name('finance.home');
     Route::get('/finance/create', [FinanceController::class, 'create'])->name('finance.create');
     Route::post('/finance/store', [FinanceController::class, 'store'])->name('finance.store');

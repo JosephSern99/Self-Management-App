@@ -157,7 +157,7 @@ agent-orchestrator/
 
 ## Deferred
 
-- **AWS account tier verification** — AD-3's on-demand design is safe either way, but Joseph should confirm whether his AWS account predates 2025-07-15 (perpetual EC2 free tier) or is newer ($200 credit / 6 months then billed) before relying on any cost projection beyond "on-demand minimizes exposure."
+- ~~**AWS account tier verification**~~ — Resolved: Joseph's AWS account (under `josephcks.work@gmail.com`) is newly created, confirmed post-2025-07-15 tier ($200 credit / 6 months, then standard rates, no perpetual EC2 free hours). AD-3's on-demand design already accounts for this.
 - **Multi-Ticket / concurrency handling** — out of MVP scope per PRD §6.2; this spine assumes one Run at a time and doesn't design for concurrent EC2 starts.
 - **Rollback/revert automation** — PRD explicitly defers this (§6.2); no AD here covers undoing a bad push.
 - **Exact GitHub Issue → RunState field mapping and Claude prompt design per node** — left to implementation; not an architecture-level invariant since it doesn't cause two builders to diverge structurally.

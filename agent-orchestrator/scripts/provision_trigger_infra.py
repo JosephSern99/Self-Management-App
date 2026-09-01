@@ -190,7 +190,73 @@ def bootstrap_user_data(bucket_name: str) -> str:
     # prevent the trailing `shutdown -h now` from firing, or the on-demand
     # cost model breaks (the instance would run indefinitely).
     return f"""#!/bin/bash
-dnf install -y git
+SETUP_LOG=/var/log/agent-orchestrator-setup.log
+echo "=== first-boot setup starting $(date -u +%Y-%m-%dT%H:%M:%SZ) ===" >> "$SETUP_LOG"
+
+# Package repo metadata isn't always ready the instant user-data starts on
+# a fresh instance; refresh explicitly and retry installs rather than
+# silently no-op'ing (discovered live: identical commands worked run
+# manually minutes after boot, but failed silently as part of user-data).
+for attempt in 1 2 3; do
+    dnf makecache >> "$SETUP_LOG" 2>&1 && break
+    echo "dnf makecache attempt $attempt failed, retrying..." >> "$SETUP_LOG"
+    sleep 10
+done
+
+install_with_retry() {{
+    local pkgs="$*"
+    for attempt in 1 2 3; do
+        if dnf install -y $pkgs >> "$SETUP_LOG" 2>&1; then
+            return 0
+        fi
+        echo "dnf install ($pkgs) attempt $attempt failed, retrying..." >> "$SETUP_LOG"
+        sleep 10
+    done
+    echo "ERROR: dnf install ($pkgs) failed after 3 attempts." >> "$SETUP_LOG"
+    return 1
+}}
+
+install_with_retry git
+
+# PHP 8.1 (matches composer.json's ^8.1 requirement). Note: AL2023's repos
+# have no pdo_sqlite package for ANY PHP version (verified live -- checked
+# 8.1 through 8.5) and PECL compilation of pdo_sqlite fails against 8.1's
+# Zend API (pulls an incompatible legacy source). Test isolation therefore
+# uses a local MariaDB instance with its own database instead of SQLite --
+# see Architecture AD-2 (amended) for the isolation mechanism this drives.
+install_with_retry php8.1 php8.1-cli php8.1-common php8.1-pdo php8.1-mbstring \\
+    php8.1-xml php8.1-mysqlnd php8.1-bcmath php8.1-zip
+install_with_retry mariadb105-server
+
+# Node/npm: several Blade views use @vite() -- without a built manifest,
+# every such view throws ViteManifestNotFoundException and every test that
+# renders one fails regardless of the actual code under test (discovered
+# live: 8 of 25 baseline tests failed this way before this fix).
+install_with_retry nodejs npm
+systemctl enable --now mariadb >> "$SETUP_LOG" 2>&1
+
+# MariaDB's root user defaults to unix_socket auth, which only works when
+# connected as the OS root user over the local socket -- Laravel's PDO
+# connection goes over TCP (127.0.0.1), which that plugin rejects
+# regardless of password (discovered live: "Access denied for user
+# 'root'@'localhost'" despite a correct empty password). A dedicated user
+# with mysql_native_password sidesteps this rather than fighting root's
+# auth plugin. Not a secret worth protecting -- this only ever holds
+# throwaway test data on localhost, never reachable from outside the
+# instance.
+mysql -uroot -e "
+CREATE DATABASE IF NOT EXISTS agent_orchestrator_test;
+CREATE USER IF NOT EXISTS 'agent_orchestrator'@'127.0.0.1' IDENTIFIED BY 'agent_test_db_pw';
+CREATE USER IF NOT EXISTS 'agent_orchestrator'@'localhost' IDENTIFIED BY 'agent_test_db_pw';
+GRANT ALL PRIVILEGES ON agent_orchestrator_test.* TO 'agent_orchestrator'@'127.0.0.1';
+GRANT ALL PRIVILEGES ON agent_orchestrator_test.* TO 'agent_orchestrator'@'localhost';
+FLUSH PRIVILEGES;
+" >> "$SETUP_LOG" 2>&1
+export HOME=/root  # composer's installer requires HOME; unset by default in this user-data context
+curl -sS https://getcomposer.org/installer 2>>"$SETUP_LOG" | php -- --install-dir=/usr/local/bin --filename=composer >> "$SETUP_LOG" 2>&1
+
+echo "=== first-boot setup finished $(date -u +%Y-%m-%dT%H:%M:%SZ) ===" >> "$SETUP_LOG"
+echo "verify: php=$(command -v php || echo MISSING) composer=$(command -v composer || echo MISSING)" >> "$SETUP_LOG"
 
 mkdir -p /opt/agent-orchestrator
 
@@ -215,6 +281,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+Environment=HOME=/root
 ExecStart=/opt/agent-orchestrator/fetch_and_run.sh
 StandardOutput=append:/var/log/agent-orchestrator-boot.log
 StandardError=append:/var/log/agent-orchestrator-boot.log

@@ -123,6 +123,43 @@ reset_working_copy() {
     return 0
 }
 
+# vendor/ and node_modules/ are both gitignored, so they survive
+# `git clean -fd` (not `-fdx`) across resets -- these only need to run once
+# per instance lifetime, or again if the lockfiles changed since the last
+# successful install.
+ensure_composer_dependencies() {
+    if [ -f "$REPO_DIR/vendor/autoload.php" ]; then
+        log "Composer dependencies already installed."
+        return 0
+    fi
+    log "Installing Composer dependencies..."
+    # HOME isn't set by default under systemd's execution context (this
+    # script runs via the agent-orchestrator-boot.service unit) and
+    # Composer requires it -- discovered live via the same failure in the
+    # first-boot user-data context.
+    if (export HOME=/root; cd "$REPO_DIR" && composer install --no-interaction --no-progress) >>"$LOG" 2>&1; then
+        log "Composer install complete."
+    else
+        log "ERROR: composer install failed."
+    fi
+}
+
+# Blade views using @vite() throw ViteManifestNotFoundException without a
+# built manifest -- discovered live: every such test failed regardless of
+# the actual code under test until this was added.
+ensure_frontend_assets() {
+    if [ -f "$REPO_DIR/public/build/manifest.json" ]; then
+        log "Frontend assets already built."
+        return 0
+    fi
+    log "Installing npm dependencies and building frontend assets..."
+    if (cd "$REPO_DIR" && npm install --no-audit --no-fund && npm run build) >>"$LOG" 2>&1; then
+        log "Frontend build complete."
+    else
+        log "ERROR: npm install/build failed."
+    fi
+}
+
 main() {
     log "=== agent-orchestrator run.sh starting ==="
     local exit_code=0
@@ -147,9 +184,12 @@ main() {
     fi
 
     if reset_working_copy "$pat"; then
+        ensure_composer_dependencies
+        ensure_frontend_assets
+
         if [ -n "$issue_number" ]; then
-            log "Node graph not yet implemented (Stories 1.4-1.7 pending). Working copy is clean and ready at $REPO_DIR."
-            # PLACEHOLDER: once Stories 1.4-1.7 exist, invoke the Python
+            log "Node graph not yet fully implemented (Story 1.7 pending). Working copy is clean and ready at $REPO_DIR."
+            # PLACEHOLDER: once Story 1.7 exists, invoke the Python
             # orchestrator here, e.g.:
             #   python3 /opt/agent-orchestrator/orchestrator.py --issue "$issue_number"
         else

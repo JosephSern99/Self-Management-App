@@ -40,10 +40,10 @@ graph LR
 - **Prevents:** two nodes independently deciding how to pass data (files on disk vs. in-memory vs. env vars), producing incompatible contracts
 - **Rule:** All inter-node data flows through one `RunState` object with fixed field names: `ticket`, `plan`, `file_targets`, `diff`, `test_result`, `review_verdict`, `spend_used`, `run_id`. A node may write to the working copy's files (Implement only) or read GitHub/Claude via the two client wrappers (AD-6); it may not otherwise touch the filesystem, network, or AWS APIs directly.
 
-### AD-2 — Test node always runs against an isolated database
+### AD-2 — Test node always runs against an isolated database `[AMENDED — see Story 1.6 live verification]`
 - **Binds:** Test node (FR-2)
 - **Prevents:** `php artisan test` hitting the live `self_management_app` MySQL database, since the repo's `.env` defaults to `DB_CONNECTION=mysql` with no testing override committed
-- **Rule:** The Test node invokes `php artisan test` with `DB_CONNECTION=sqlite` and `DB_DATABASE=:memory:` forced as process environment variables, regardless of the working copy's `.env`.
+- **Rule:** The Test node invokes `php artisan test` with everything the app needs forced via process environment variables, regardless of the working copy's `.env` (which doesn't exist at all in a fresh clone — `.env` is gitignored): `DB_CONNECTION=mysql`, `DB_HOST=127.0.0.1`, `DB_DATABASE=agent_orchestrator_test`, `DB_USERNAME=agent_orchestrator`, `DB_PASSWORD=agent_test_db_pw` (a dedicated local MariaDB user/database, provisioned once at first boot — not `root`, whose default `unix_socket` auth plugin rejects any TCP connection regardless of password), `APP_URL=http://localhost` (a subpath-style `APP_URL`, as some local dev conventions use, was found to make Laravel's HTTP test client silently mismatch nearly every route), and `APP_KEY=base64:...` (a fixed throwaway key — Laravel requires one regardless of testing context and none exists without a `.env`). Originally specified as `DB_CONNECTION=sqlite`/`DB_DATABASE=:memory:`; amended after live verification found AL2023 has no working `pdo_sqlite` for any PHP version (no package for PHP 8.1–8.5, and PECL compilation fails against 8.1's Zend API). The isolation *intent* — never touch production data — is unchanged; only the mechanism is. Test node also depends on `npm install && npm run build` having produced `public/build/manifest.json` at least once (any Blade view using `@vite()` throws `ViteManifestNotFoundException` without it, which looked like 8 unrelated test failures before this was traced) — built once per instance lifetime alongside `composer install`, not per-Run.
 
 ### AD-3 — On-demand compute, not always-on
 - **Binds:** all 6 nodes, FR-4
@@ -114,6 +114,8 @@ graph LR
 | AWS Lambda | trigger poll (AD-4) |
 | AWS S3 | Run Log storage (AD-9) |
 | AWS SSM Parameter Store | secrets (AD-10) |
+| MariaDB (mariadb105) | isolated Test-node database (AD-2, amended) |
+| Node.js / npm (AL2023 default) | one-time frontend asset build so `@vite()` views don't break Test node (AD-2) |
 
 ## Structural Seed
 
@@ -167,3 +169,4 @@ agent-orchestrator/
 - **Rollback/revert automation** — PRD explicitly defers this (§6.2); no AD here covers undoing a bad push.
 - **Exact GitHub Issue → RunState field mapping and Claude prompt design per node** — left to implementation; not an architecture-level invariant since it doesn't cause two builders to diverge structurally.
 - **Human-approval gate** — PRD defers this to a possible v2 (§8, Open Question 5); if added later, it inserts as a new node between Self-Review and Push and would need a new AD for where the pause persists state.
+- **Two pre-existing app bugs found during Story 1.6 live verification, not fixed by this pipeline** — (1) root route `/` redirect regression breaking 2 tests, from the "Refresh finance UI" commit; (2) `ProfileController`'s account-deletion calling `Auth::logout()` on a guard that doesn't support it. Both are real, both are Joseph's to fix directly — (2) specifically touches denylisted auth territory (FR-5) the autonomous pipeline must never modify.

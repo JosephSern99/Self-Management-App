@@ -12,3 +12,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-trigger-lambda-ticket-detection.md`
   summary: Write a teardown/decommission script for the trigger infrastructure (EC2 instance, IAM roles, security group, Lambda, EventBridge rule).
   evidence: Review flagged that `provision_trigger_infra.py` only creates/updates resources, with no corresponding reversal path for cost control or environment reset. Not needed for MVP; worth adding once the pipeline is stable and Joseph wants to reset/rebuild the stack.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-orchestrator-bootstrap.md`
+  summary: Add log rotation/truncation for /var/log/agent-orchestrator-run.log on the EC2 instance.
+  evidence: Review flagged the log grows unbounded across every boot with no size cap. Negligible at hobby scale over the near term; worth adding if the instance runs for a long time without being replaced.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-orchestrator-bootstrap.md`
+  summary: Verify the uploaded run.sh in S3 matches the local file (e.g. ETag/hash check) after upload_bootstrap_script.py runs.
+  evidence: Review flagged that "idempotent upload" is asserted but not confirmed post-upload. The added bash -n lint-before-upload check catches syntax errors, which was the main risk; full content verification is lower priority.

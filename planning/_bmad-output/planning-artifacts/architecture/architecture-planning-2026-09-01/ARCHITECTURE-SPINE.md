@@ -7,7 +7,7 @@ paradigm: 'pipes-and-filters DAG (LangGraph StateGraph)'
 scope: 'Full system: trigger, node graph, cost/safety guardrails, AWS hosting'
 status: final
 created: '2026-09-01'
-updated: '2026-09-01'
+updated: '2026-09-02'
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5]
 sources: ['_bmad-output/planning-artifacts/prds/prd-planning-2026-09-01/prd.md']
 companions: []
@@ -54,6 +54,11 @@ graph LR
 - **Binds:** FR-1
 - **Prevents:** needing a public HTTPS endpoint (API Gateway) or an always-on listener process, and resolves PRD Open Question 1
 - **Rule:** An EventBridge schedule invokes a Lambda every 5 minutes (matching FR-1's detection-latency target). The Lambda polls the GitHub Issues API for issues labeled `agent-ready`, and on a match starts the EC2 instance, passing the issue number in.
+
+### AD-11 — Every-boot logic runs via a systemd unit, never via EC2 user-data directly `[ADOPTED — discovered live during Story 1.3]`
+- **Binds:** AD-3, AD-5, the whole start/stop Run lifecycle
+- **Prevents:** silently doing nothing on every Run after the first. EC2 user-data (cloud-init's `scripts-user` module) executes exactly once per instance lifetime, never again on a later stop/start — confirmed live via `/var/log/cloud-init.log` showing `"config-scripts-user already ran (freq=once-per-instance)"` on a second start.
+- **Rule:** EC2 user-data is first-boot-only: it installs OS packages (`git`) and a systemd oneshot unit (`agent-orchestrator-boot.service`, `WantedBy=multi-user.target`) whose `ExecStart` fetches and runs `bootstrap/run.sh` from S3, then powers the instance off. All future boots run this unit through systemd's normal boot sequence, never through cloud-init re-executing user-data.
 
 ### AD-5 — Working copy is reset before and after every Run
 - **Binds:** all 6 nodes

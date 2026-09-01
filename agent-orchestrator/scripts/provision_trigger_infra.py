@@ -178,10 +178,24 @@ def default_vpc_id(ec2) -> str:
 
 
 def bootstrap_user_data(bucket_name: str) -> str:
-    # No `set -e`: a failing run.sh must never prevent the trailing
-    # `shutdown -h now` from firing, or the on-demand cost model breaks
-    # (the instance would run indefinitely on any bootstrap failure).
+    # EC2 user-data (cloud-init's scripts-user module) runs ONCE PER
+    # INSTANCE LIFETIME, never again on a later stop/start -- confirmed live
+    # ("config-scripts-user already ran (freq=once-per-instance)" in
+    # /var/log/cloud-init.log on a second start). So this first-boot-only
+    # script must not contain the actual fetch-and-run logic; it installs a
+    # systemd oneshot unit that runs on every future boot instead, since
+    # systemd's own boot sequence isn't subject to cloud-init's semaphore.
+    #
+    # No `set -e` anywhere in the wrapper: a failing run.sh must never
+    # prevent the trailing `shutdown -h now` from firing, or the on-demand
+    # cost model breaks (the instance would run indefinitely).
     return f"""#!/bin/bash
+dnf install -y git
+
+mkdir -p /opt/agent-orchestrator
+
+cat > /opt/agent-orchestrator/fetch_and_run.sh << 'WRAPPER_EOF'
+#!/bin/bash
 if aws s3 cp s3://{bucket_name}/bootstrap/run.sh /tmp/run.sh 2>/tmp/fetch.log; then
     chmod +x /tmp/run.sh
     /tmp/run.sh || echo "run.sh exited non-zero: $?" >> /var/log/agent-orchestrator-boot.log
@@ -190,6 +204,28 @@ else
     cat /tmp/fetch.log >> /var/log/agent-orchestrator-boot.log
 fi
 shutdown -h now
+WRAPPER_EOF
+chmod +x /opt/agent-orchestrator/fetch_and_run.sh
+
+cat > /etc/systemd/system/agent-orchestrator-boot.service << 'UNIT_EOF'
+[Unit]
+Description=agent-orchestrator: fetch and run bootstrap/run.sh every boot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/agent-orchestrator/fetch_and_run.sh
+StandardOutput=append:/var/log/agent-orchestrator-boot.log
+StandardError=append:/var/log/agent-orchestrator-boot.log
+
+[Install]
+WantedBy=multi-user.target
+UNIT_EOF
+
+systemctl daemon-reload
+systemctl enable agent-orchestrator-boot.service
+systemctl start agent-orchestrator-boot.service
 """
 
 

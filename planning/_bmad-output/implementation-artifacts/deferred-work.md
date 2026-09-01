@@ -18,3 +18,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-orchestrator-bootstrap.md`
   summary: Verify the uploaded run.sh in S3 matches the local file (e.g. ETag/hash check) after upload_bootstrap_script.py runs.
   evidence: Review flagged that "idempotent upload" is asserted but not confirmed post-upload. The added bash -n lint-before-upload check catches syntax errors, which was the main risk; full content verification is lower priority.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-runstate-clients-spend-ledger.md`
+  summary: Add real file locking (not just atomic writes) around SpendLedger.record_call() to close the read-modify-write race between two concurrent writers.
+  evidence: Review flagged that two interleaved record_call() invocations could each read before either writes, silently dropping one entry. Atomic temp-file-then-rename writes (implemented) prevent corruption from a crash mid-write, but don't close the interleaving race. Low probability given the system runs one Run at a time by design (PRD explicitly defers concurrency); worth closing if that assumption ever changes.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-runstate-clients-spend-ledger.md`
+  summary: Recover/log spend if a Claude API call is billed server-side but the client never receives a usable response (e.g. connection drops after processing).
+  evidence: Review flagged this as a way real spend could go unrecorded, undercounting the ledger against the true RM100 cap. No general fix exists without an Anthropic-side usage-reconciliation API; accepted as a known small residual risk for now.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-runstate-clients-spend-ledger.md`
+  summary: Have GitHubClient.push() fetch/rebase before pushing, and let Locate/Implement pass an explicit path scope instead of defaulting to `git add -A`.
+  evidence: Review flagged both as real gaps for a no-review-gate push straight to main. Low risk today (solo system, one Run at a time, working copy freshly reset per AD-5 before each Run) -- push() already accepts an optional `paths` param for future stories to use once Locate's file_targets are available to pass through.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-runstate-clients-spend-ledger.md`
+  summary: Add status/current-node/timestamp fields to RunState for resumability and stuck-run detection.
+  evidence: Review flagged RunState has no way to tell which node a run is in or when it started. AD-1 fixes RunState's field list explicitly; adding fields needs an architecture amendment, not a unilateral change mid-story. Revisit when Stories 1.5-1.7 build the actual node graph and need this.

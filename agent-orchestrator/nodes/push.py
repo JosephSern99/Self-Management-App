@@ -103,8 +103,27 @@ def push(state: RunState, github_client: GitHubClient, repo_dir: str) -> RunStat
 
     github_client.push(repo_dir, commit_message, paths=changed_files)
 
+    # The push to main already irreversibly succeeded by this point -- a
+    # failure to comment/close is a much lower-severity, non-blocking
+    # concern than the commit itself, and must never make this function
+    # raise (orchestrator.py would otherwise post a "no changes were made"
+    # failure comment, which would be false).
     if issue_number is not None:
-        github_client.comment_issue(issue_number, _build_summary(state))
-        github_client.close_issue(issue_number)
+        try:
+            github_client.comment_issue(issue_number, _build_summary(state))
+        except Exception as exc:
+            logger.warning(
+                "Push succeeded but could not comment on issue #%s: %s",
+                issue_number,
+                exc,
+            )
+        try:
+            github_client.close_issue(issue_number)
+        except Exception as exc:
+            logger.warning(
+                "Push succeeded but could not close issue #%s: %s",
+                issue_number,
+                exc,
+            )
 
     return state

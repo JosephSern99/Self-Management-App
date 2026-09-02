@@ -39,6 +39,18 @@ class GitHubClient:
     def __init__(self, token: str | None = None):
         self.token = token or fetch_ssm_secret(GITHUB_PAT_PARAM)
 
+    def _sanitize(self, value: object) -> str:
+        """Redacts self.token out of an exception's (or any object's)
+        string representation before it's embedded into a raised message --
+        subprocess.CalledProcessError's str() includes the full command
+        argv, which for the credentialed set-url/push commands contains the
+        raw PAT-embedded URL. Without this, a failure here could leak the
+        live GitHub PAT into a persisted RunLog or a public issue comment."""
+        text = str(value)
+        if self.token:
+            text = text.replace(self.token, "REDACTED")
+        return text
+
     def _request(self, method: str, path: str, body=None):
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(
@@ -150,19 +162,19 @@ class GitHubClient:
             except subprocess.CalledProcessError as cleanup_exc:
                 if push_error:
                     raise GitPushError(
-                        f"Push failed ({push_error}) AND credential cleanup also "
-                        f"failed ({cleanup_exc}) -- the PAT may still be in "
-                        f"{repo_dir}/.git/config."
+                        f"Push failed ({self._sanitize(push_error)}) AND credential "
+                        f"cleanup also failed ({self._sanitize(cleanup_exc)}) -- the "
+                        f"PAT may still be in {repo_dir}/.git/config."
                     ) from push_error
                 logger.error(
                     "Push succeeded but credential cleanup failed: %s. PAT may "
                     "still be in %s/.git/config.",
-                    cleanup_exc,
+                    self._sanitize(cleanup_exc),
                     repo_dir,
                 )
 
         if push_error:
-            raise GitPushError(f"git push failed: {push_error}") from push_error
+            raise GitPushError(f"git push failed: {self._sanitize(push_error)}") from push_error
 
         rev = subprocess.run(
             ["git", "-C", repo_dir, "rev-parse", "HEAD"],

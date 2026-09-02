@@ -163,6 +163,45 @@ def test_push_raises_if_review_verdict_is_fail(tmp_path):
     github_client.push.assert_not_called()
 
 
+def test_push_does_not_raise_when_comment_issue_fails_after_successful_push(tmp_path):
+    # The git push to main already irreversibly succeeded by the time
+    # comment_issue/close_issue run -- a failure there must not make push()
+    # raise, since orchestrator.py would otherwise post a false "no changes
+    # were made" failure comment on top of a change that's already live.
+    github_client = MagicMock()
+    github_client.comment_issue.side_effect = RuntimeError("GitHub API hiccup")
+    state = make_state()
+
+    with patch(
+        "nodes.push.subprocess.run",
+        return_value=fake_completed(" M app/Foo.php\n"),
+    ):
+        result = push(state, github_client, str(tmp_path))
+
+    assert result is state
+    github_client.push.assert_called_once()
+    github_client.comment_issue.assert_called_once()
+    # close_issue is still attempted even though comment_issue raised.
+    github_client.close_issue.assert_called_once_with(42)
+
+
+def test_push_does_not_raise_when_close_issue_fails_after_successful_push(tmp_path):
+    github_client = MagicMock()
+    github_client.close_issue.side_effect = RuntimeError("GitHub API hiccup")
+    state = make_state()
+
+    with patch(
+        "nodes.push.subprocess.run",
+        return_value=fake_completed(" M app/Foo.php\n"),
+    ):
+        result = push(state, github_client, str(tmp_path))
+
+    assert result is state
+    github_client.push.assert_called_once()
+    github_client.comment_issue.assert_called_once()
+    github_client.close_issue.assert_called_once_with(42)
+
+
 def test_push_raises_if_review_verdict_is_empty(tmp_path):
     github_client = MagicMock()
     state = make_state(review_verdict="")

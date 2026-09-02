@@ -10,6 +10,11 @@ REPO_HOST_PATH="github.com/JosephSern99/Self-Management-App.git"
 CLEAN_REMOTE_URL="https://${REPO_HOST_PATH}"
 LOG=/var/log/agent-orchestrator-run.log
 NET_TIMEOUT=60
+# Generous enough for all six nodes including a full `php artisan test` run
+# (which alone is capped at 300s) plus Claude API latency, but bounded --
+# a hung node/API call must never leave the on-demand instance running
+# indefinitely, or it breaks the $0 AWS-cost invariant (AD-4).
+RUN_TIMEOUT=1800
 
 log() {
     echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $1" | tee -a "$LOG"
@@ -144,6 +149,25 @@ ensure_composer_dependencies() {
     fi
 }
 
+# requirements.txt (boto3, anthropic) only needs installing once per
+# instance lifetime, same idempotent-if-missing shape as
+# ensure_composer_dependencies -- checks for the anthropic package's
+# presence rather than re-running pip on every single boot.
+ensure_python_dependencies() {
+    if python3 -c "import boto3, anthropic" >/dev/null 2>&1; then
+        log "Python dependencies already installed."
+        return 0
+    fi
+    log "Installing Python dependencies..."
+    if python3 -m pip install --quiet -r "$REPO_DIR/agent-orchestrator/requirements.txt" >>"$LOG" 2>&1; then
+        log "Python dependencies installed."
+        return 0
+    else
+        log "ERROR: pip install -r requirements.txt failed."
+        return 1
+    fi
+}
+
 # Blade views using @vite() throw ViteManifestNotFoundException without a
 # built manifest -- discovered live: every such test failed regardless of
 # the actual code under test until this was added.
@@ -187,11 +211,14 @@ main() {
         ensure_composer_dependencies
         ensure_frontend_assets
 
-        if [ -n "$issue_number" ]; then
-            log "Node graph not yet fully implemented (Story 1.7 pending). Working copy is clean and ready at $REPO_DIR."
-            # PLACEHOLDER: once Story 1.7 exists, invoke the Python
-            # orchestrator here, e.g.:
-            #   python3 /opt/agent-orchestrator/orchestrator.py --issue "$issue_number"
+        if ! ensure_python_dependencies; then
+            log "ERROR: Python dependencies unavailable -- skipping orchestrator invocation."
+            exit_code=1
+        elif [ -n "$issue_number" ]; then
+            log "Running orchestrator for issue #$issue_number."
+            timeout "$RUN_TIMEOUT" python3 "$REPO_DIR/agent-orchestrator/orchestrator.py" --issue "$issue_number" >>"$LOG" 2>&1
+            exit_code=$?
+            log "Orchestrator finished for issue #$issue_number (exit $exit_code)."
         else
             log "No issue to process this boot; lifecycle scaffold verified only."
         fi

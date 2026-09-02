@@ -57,6 +57,28 @@ get_instance_id() {
     echo "$id"
 }
 
+# boto3 (unlike the AWS CLI, which auto-detects region from IMDS) requires
+# an explicit region -- discovered live: orchestrator.py failed every AWS
+# call with botocore.exceptions.NoRegionError despite the AWS CLI calls
+# elsewhere in this same script working fine. Same IMDSv2 pattern as
+# get_instance_id().
+get_region() {
+    local token region
+    token=$(timeout 10 curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+        -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+    if [ -z "$token" ]; then
+        log "ERROR: could not obtain IMDSv2 token for region lookup."
+        return 1
+    fi
+    region=$(timeout 10 curl -s -H "X-aws-ec2-metadata-token: $token" \
+        http://169.254.169.254/latest/meta-data/placement/region)
+    if [ -z "$region" ]; then
+        log "ERROR: could not resolve region from IMDS."
+        return 1
+    fi
+    echo "$region"
+}
+
 get_current_issue() {
     local instance_id="$1"
     local out
@@ -154,41 +176,36 @@ ensure_composer_dependencies() {
 # ensure_composer_dependencies -- checks for the anthropic package's
 # presence rather than re-running pip on every single boot.
 #
-# Self-heals a missing `pip` module rather than relying solely on
-# provision_trigger_infra.py's first-boot user-data (which never reruns on
-# an already-provisioned instance, per cloud-init's once-per-instance
-# semaphore -- see bootstrap_user_data()'s own comment) -- discovered live:
-# an instance provisioned before python3-pip was added to that user-data
-# had no pip at all, and would otherwise never recover without a manual
+# Uses python3.12 explicitly, never the bare `python3` this script uses
+# elsewhere for its own IMDS/tag helpers -- discovered live: AL2023's
+# default `python3` resolves to 3.9, but the `anthropic` SDK's 1.x releases
+# require Python >=3.10, so a plain `python3 -m pip install` only ever finds
+# pre-1.0 anthropic versions on PyPI and fails outright. python3.12 (with
+# its own bundled modern pip) is present on this AMI already and installs
+# both dependencies cleanly with no further pip-upgrade workaround needed.
+#
+# Self-heals rather than relying solely on provision_trigger_infra.py's
+# first-boot user-data (which never reruns on an already-provisioned
+# instance, per cloud-init's once-per-instance semaphore -- see
+# bootstrap_user_data()'s own comment) -- discovered live: an instance
+# provisioned before python3.12/pip were confirmed present in that
+# user-data would otherwise never recover without a manual
 # terminate/recreate. Same self-healing precedent as this file's existing
 # git-availability handling.
 ensure_python_dependencies() {
-    if python3 -c "import boto3, anthropic" >/dev/null 2>&1; then
+    if python3.12 -c "import boto3, anthropic" >/dev/null 2>&1; then
         log "Python dependencies already installed."
         return 0
     fi
-    if ! python3 -m pip --version >/dev/null 2>&1; then
-        log "python3 has no pip module -- installing python3-pip..."
-        if ! timeout "$NET_TIMEOUT" sudo dnf install -y python3-pip >>"$LOG" 2>&1; then
-            log "ERROR: dnf install python3-pip failed."
+    if ! command -v python3.12 >/dev/null 2>&1 || ! python3.12 -m pip --version >/dev/null 2>&1; then
+        log "python3.12/pip missing -- installing python3.12 python3.12-pip..."
+        if ! timeout "$NET_TIMEOUT" sudo dnf install -y python3.12 python3.12-pip >>"$LOG" 2>&1; then
+            log "ERROR: dnf install python3.12 python3.12-pip failed."
             return 1
         fi
     fi
-    # AL2023's packaged pip (21.3.1, from 2021) resolves only pre-1.0
-    # `anthropic` releases against PyPI -- discovered live: `pip install
-    # anthropic>=1.1` failed with "No matching distribution" listing only
-    # 0.x versions despite 1.x+ existing on PyPI. Upgrading pip itself
-    # (the standard fix for a stale resolver) is required before installing
-    # the actual dependencies, not optional cleanup. `--ignore-installed`
-    # is required too -- discovered live: a plain `--upgrade` fails with
-    # "Cannot uninstall pip 21.3.1, RECORD file not found" because the rpm
-    # package manager (not pip's own metadata) owns this install, a known
-    # rpm-installed-pip quirk.
-    if ! timeout "$NET_TIMEOUT" python3 -m pip install --quiet --upgrade --ignore-installed pip >>"$LOG" 2>&1; then
-        log "WARNING: pip self-upgrade failed; proceeding with existing pip anyway."
-    fi
     log "Installing Python dependencies..."
-    if python3 -m pip install --quiet -r "$REPO_DIR/agent-orchestrator/requirements.txt" >>"$LOG" 2>&1; then
+    if python3.12 -m pip install --quiet -r "$REPO_DIR/agent-orchestrator/requirements.txt" >>"$LOG" 2>&1; then
         log "Python dependencies installed."
         return 0
     else
@@ -226,7 +243,7 @@ main() {
         exit 1
     fi
 
-    local instance_id issue_number
+    local instance_id issue_number region
     instance_id=$(get_instance_id)
     issue_number=$(get_current_issue "$instance_id")
     if [ -z "$issue_number" ] || [ "$issue_number" = "None" ]; then
@@ -245,9 +262,15 @@ main() {
             exit_code=1
         elif [ -n "$issue_number" ]; then
             log "Running orchestrator for issue #$issue_number."
-            timeout "$RUN_TIMEOUT" python3 "$REPO_DIR/agent-orchestrator/orchestrator.py" --issue "$issue_number" >>"$LOG" 2>&1
-            exit_code=$?
-            log "Orchestrator finished for issue #$issue_number (exit $exit_code)."
+            region=$(get_region)
+            if [ -z "$region" ]; then
+                log "ERROR: could not resolve AWS region -- boto3 requires one explicitly (unlike the AWS CLI's IMDS auto-detection). Skipping orchestrator invocation."
+                exit_code=1
+            else
+                AWS_DEFAULT_REGION="$region" timeout "$RUN_TIMEOUT" python3.12 "$REPO_DIR/agent-orchestrator/orchestrator.py" --issue "$issue_number" >>"$LOG" 2>&1
+                exit_code=$?
+                log "Orchestrator finished for issue #$issue_number (exit $exit_code)."
+            fi
         else
             log "No issue to process this boot; lifecycle scaffold verified only."
         fi

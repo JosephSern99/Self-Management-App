@@ -216,7 +216,7 @@ install_with_retry() {{
     return 1
 }}
 
-install_with_retry git python3-pip
+install_with_retry git python3.12 python3.12-pip
 
 # PHP 8.1 (matches composer.json's ^8.1 requirement). Note: AL2023's repos
 # have no pdo_sqlite package for ANY PHP version (verified live -- checked

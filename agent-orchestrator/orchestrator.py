@@ -132,21 +132,31 @@ def run(issue_number: int, repo_dir: str = DEFAULT_REPO_DIR) -> str:
                 outcome = "aborted"
                 reason = str(exc)
                 logger.warning("Run %s aborted during '%s': %s", run_id, node_name, reason)
+                state.spend_used = spend_ledger.total_spend_myr()
                 run_log.record_node(node_name, state)
                 break
             except (ScopeViolation, TestsFailedAfterRetries, SelfReviewRejected) as exc:
                 outcome = "failed"
                 reason = f"{node_name}: {exc}"
                 logger.warning("Run %s failed at '%s': %s", run_id, node_name, exc)
+                state.spend_used = spend_ledger.total_spend_myr()
                 run_log.record_node(node_name, state)
                 break
             except Exception as exc:
                 outcome = "failed"
                 reason = f"{node_name}: unexpected error: {exc}"
                 logger.exception("Run %s hit an unexpected error in '%s'", run_id, node_name)
+                state.spend_used = spend_ledger.total_spend_myr()
                 run_log.record_node(node_name, state)
                 break
             else:
+                # RunState.spend_used is never written by any node itself
+                # (ClaudeClient logs real cost straight to SpendLedger,
+                # bypassing RunState) -- the orchestrator is the only place
+                # that sees both, so it snapshots the real cumulative total
+                # here rather than leaving the field permanently at its 0.0
+                # default in every persisted RunLog entry.
+                state.spend_used = spend_ledger.total_spend_myr()
                 run_log.record_node(node_name, state)
         else:
             outcome = "success"

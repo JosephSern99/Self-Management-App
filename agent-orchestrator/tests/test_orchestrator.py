@@ -101,6 +101,39 @@ def test_full_success_runs_all_six_nodes_in_order():
     assert [entry["node"] for entry in run_log.node_trace] == ALL_NODES
 
 
+def test_spend_used_reflects_real_ledger_total_on_success():
+    # RunState.spend_used is never written by any node itself (ClaudeClient
+    # logs real cost straight to SpendLedger, bypassing RunState) -- only
+    # the orchestrator sees both, so it must snapshot the real cumulative
+    # total into state.spend_used at every node boundary, not leave every
+    # persisted RunLog entry at the field's 0.0 default.
+    with ExitStack() as stack:
+        h = build_harness(stack)
+        h.ledger.total_spend_myr.return_value = 0.29
+        orchestrator.run(42, repo_dir="/tmp/repo")
+
+    run_log = h.persist_mock.call_args.args[0]
+    assert all(entry["spend_used"] == 0.29 for entry in run_log.node_trace)
+
+
+def test_spend_used_captured_even_when_a_node_fails():
+    def raise_violation(state, *args, **kwargs):
+        raise ScopeViolation("bad path")
+
+    with ExitStack() as stack:
+        h = build_harness(stack, node_side_effects={"locate": raise_violation})
+        h.ledger.total_spend_myr.return_value = 0.11
+        orchestrator.run(42, repo_dir="/tmp/repo")
+
+    run_log = h.persist_mock.call_args.args[0]
+    assert [entry["node"] for entry in run_log.node_trace] == ["plan", "locate"]
+    # "locate" is the node that actually raised; its own trace entry (added
+    # by the except branch) must still carry the real spend at the point
+    # of failure, not the field's 0.0 default.
+    assert run_log.node_trace[-1]["node"] == "locate"
+    assert run_log.node_trace[-1]["spend_used"] == 0.11
+
+
 def test_cap_exhausted_before_start_aborts_with_no_nodes_run():
     with ExitStack() as stack:
         h = build_harness(stack, cap_sequence=[False])

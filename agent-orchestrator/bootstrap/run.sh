@@ -179,8 +179,12 @@ ensure_python_dependencies() {
     # anthropic>=1.1` failed with "No matching distribution" listing only
     # 0.x versions despite 1.x+ existing on PyPI. Upgrading pip itself
     # (the standard fix for a stale resolver) is required before installing
-    # the actual dependencies, not optional cleanup.
-    if ! timeout "$NET_TIMEOUT" python3 -m pip install --quiet --upgrade pip >>"$LOG" 2>&1; then
+    # the actual dependencies, not optional cleanup. `--ignore-installed`
+    # is required too -- discovered live: a plain `--upgrade` fails with
+    # "Cannot uninstall pip 21.3.1, RECORD file not found" because the rpm
+    # package manager (not pip's own metadata) owns this install, a known
+    # rpm-installed-pip quirk.
+    if ! timeout "$NET_TIMEOUT" python3 -m pip install --quiet --upgrade --ignore-installed pip >>"$LOG" 2>&1; then
         log "WARNING: pip self-upgrade failed; proceeding with existing pip anyway."
     fi
     log "Installing Python dependencies..."

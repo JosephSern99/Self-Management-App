@@ -174,6 +174,15 @@ ensure_python_dependencies() {
             return 1
         fi
     fi
+    # AL2023's packaged pip (21.3.1, from 2021) resolves only pre-1.0
+    # `anthropic` releases against PyPI -- discovered live: `pip install
+    # anthropic>=1.1` failed with "No matching distribution" listing only
+    # 0.x versions despite 1.x+ existing on PyPI. Upgrading pip itself
+    # (the standard fix for a stale resolver) is required before installing
+    # the actual dependencies, not optional cleanup.
+    if ! timeout "$NET_TIMEOUT" python3 -m pip install --quiet --upgrade pip >>"$LOG" 2>&1; then
+        log "WARNING: pip self-upgrade failed; proceeding with existing pip anyway."
+    fi
     log "Installing Python dependencies..."
     if python3 -m pip install --quiet -r "$REPO_DIR/agent-orchestrator/requirements.txt" >>"$LOG" 2>&1; then
         log "Python dependencies installed."

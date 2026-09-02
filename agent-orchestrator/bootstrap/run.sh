@@ -153,10 +153,26 @@ ensure_composer_dependencies() {
 # instance lifetime, same idempotent-if-missing shape as
 # ensure_composer_dependencies -- checks for the anthropic package's
 # presence rather than re-running pip on every single boot.
+#
+# Self-heals a missing `pip` module rather than relying solely on
+# provision_trigger_infra.py's first-boot user-data (which never reruns on
+# an already-provisioned instance, per cloud-init's once-per-instance
+# semaphore -- see bootstrap_user_data()'s own comment) -- discovered live:
+# an instance provisioned before python3-pip was added to that user-data
+# had no pip at all, and would otherwise never recover without a manual
+# terminate/recreate. Same self-healing precedent as this file's existing
+# git-availability handling.
 ensure_python_dependencies() {
     if python3 -c "import boto3, anthropic" >/dev/null 2>&1; then
         log "Python dependencies already installed."
         return 0
+    fi
+    if ! python3 -m pip --version >/dev/null 2>&1; then
+        log "python3 has no pip module -- installing python3-pip..."
+        if ! timeout "$NET_TIMEOUT" sudo dnf install -y python3-pip >>"$LOG" 2>&1; then
+            log "ERROR: dnf install python3-pip failed."
+            return 1
+        fi
     fi
     log "Installing Python dependencies..."
     if python3 -m pip install --quiet -r "$REPO_DIR/agent-orchestrator/requirements.txt" >>"$LOG" 2>&1; then
